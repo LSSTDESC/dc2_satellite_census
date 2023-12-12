@@ -13,10 +13,8 @@ import healpy as hp
 import fitsio
 import pandas as pd
 
-try:
-    from ugali.utils.healpix import read_map
-except ImportError:
-    from healpy import read_map
+from healpy import read_map
+from healsparse import HealSparseMap
 
 
 def setdefaults(kwargs,defaults):
@@ -27,20 +25,16 @@ def setdefaults(kwargs,defaults):
 
 def get_dirname(dirname_in):
     # First see if the path exists
-    basedirs = [
-        os.environ.get("Y3SATDIR","./"),
-        '../'
-    ]
-    for basedir in basedirs:
-        dirname = os.path.join(basedir,dirname_in)
-        if os.path.exists(dirname):
-            return dirname
+    basedir = '/project/shared/data/satsim/'
+    dirname = os.path.join(basedir,dirname_in)
+    if os.path.exists(dirname):
+        return dirname
 
     raise Exception("Could not find %s"%os.path.basename(dirname))
 
 
 def get_datadir():
-    return get_dirname('data')
+    return get_dirname('lsst_dc2_v6')
 
 
 def get_plotdir():
@@ -82,16 +76,17 @@ TYPE = odict([
 ])
 
 DATADIR  = get_datadir()
-#DES_SIMS = join(DATADIR,'sim_population_v12.2.0_des_results_0000001-0100000.fits')
 DES_SIMS = join(DATADIR,'sim_population_v12.2.0_des_results_0000001-0100000.fits')
-#PS1_SIMS = join(DATADIR,'sim_population_v12.2.1_ps1_results_0000001-1000000.fits')
 PS1_SIMS = join(DATADIR,'sim_population_v13.0.1_ps1_results_0000001-1000000.fits')
+# wondering what to do about lsst_sims...
+LSST_SIMS = join(DATADIR, 'sim_population_lsst_dc2_v6_mc_source_id_0000001-0000100.fits')
 DWARFS   = join(DATADIR,'dwarf_literature_values.txt')
 EBV      = join(DATADIR,'ebv_sfd98_fullres_nside_4096_nest_equatorial.fits.gz')
 
 MASK_VERSION  = '6.1'
 DES_MASK = join(DATADIR,'healpix_mask_des_v{}.fits.gz'.format(MASK_VERSION))
 PS1_MASK = join(DATADIR,'healpix_mask_ps1_v{}.fits.gz'.format(MASK_VERSION))
+LSST_MASK = '/home/kb/3-3_10_year_depth_g_nside_128.hs'
 
 DES_CLASS = join(DATADIR,'classifier_des.yaml')
 PS1_CLASS = join(DATADIR,'classifier_ps1.yaml')
@@ -115,8 +110,9 @@ def load_ps1_sims(filename=None):
 
 def load_sims(survey,filename=None):
     if filename is not None: pass
-    elif survey == 'des': filename = DES_SIMS
-    elif survey == 'ps1': filename = PS1_SIMS
+    elif survey['name'] == 'des': filename = DES_SIMS
+    elif survey['name'] == 'ps1': filename = PS1_SIMS
+    elif survey['name'] == 'lsst': filename = LSST_SIMS
     else: raise Exception("Unrecognized survey: %s"%survey)
 
     print("Loading %s..."%filename)
@@ -133,7 +129,10 @@ def load_sims(survey,filename=None):
 def load_hpxmap(filename,nest=False):
     """ Load the mask file """
     print("Loading %s..."%filename)
-    return read_map(filename,nest)
+    if '.hs' in filename:
+        return HealSparseMap.read(filename)
+    else:
+        return read_map(filename,nest)
 
 
 #load_mask = load_hpxmap
@@ -148,10 +147,13 @@ def load_ps1_mask(nest=False):
     #return fitsio.read(PS1_MASK)['T'].ravel()
     return load_hpxmap(PS1_MASK,nest)
 
+def load_lsst_mask(nest=False):
+    return load_hpxmap(LSST_MASK, nest)
 
 def load_mask(survey,nest=False):
-    if 'ps1' in survey: return load_ps1_mask()
-    elif 'des' in survey: return load_des_mask()
+    if survey['name'] == 'ps1': return load_ps1_mask()
+    elif survey['name'] == 'des': return load_des_mask()
+    elif survey['name'] == 'lsst': return load_lsst_mask()
     else: raise Exception("Unrecognized survey: %s"%survey)
 
 

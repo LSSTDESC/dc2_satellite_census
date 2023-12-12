@@ -8,6 +8,8 @@ import pickle
 import itertools
 import yaml
 import warnings
+import sys
+sys.path.append(os.path.expandvars('$HOME/software/'))
 
 import numpy as np
 import healpy as hp
@@ -19,7 +21,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.model_selection import GridSearchCV
 import xgboost as xgb
 
-import utils
+import dc2_satellite_census.code.utils as utils
 
 class SurveySelectionFunction(object):
 
