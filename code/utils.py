@@ -15,7 +15,7 @@ import pandas as pd
 
 from healpy import read_map
 from healsparse import HealSparseMap
-
+from IPython.core.debugger import set_trace
 
 def setdefaults(kwargs,defaults):
     for k,v in defaults.items():
@@ -79,14 +79,14 @@ DATADIR  = get_datadir()
 DES_SIMS = join(DATADIR,'sim_population_v12.2.0_des_results_0000001-0100000.fits')
 PS1_SIMS = join(DATADIR,'sim_population_v13.0.1_ps1_results_0000001-1000000.fits')
 # wondering what to do about lsst_sims...
-LSST_SIMS = join(DATADIR, 'sim_population_lsst_dc2_v6_mc_source_id_0000001-0000100.fits')
+LSST_SIMS = '/home/kb/software/simple_adl/notebooks/simsv6_results.csv'
 DWARFS   = join(DATADIR,'dwarf_literature_values.txt')
 EBV      = join(DATADIR,'ebv_sfd98_fullres_nside_4096_nest_equatorial.fits.gz')
 
 MASK_VERSION  = '6.1'
 DES_MASK = join(DATADIR,'healpix_mask_des_v{}.fits.gz'.format(MASK_VERSION))
 PS1_MASK = join(DATADIR,'healpix_mask_ps1_v{}.fits.gz'.format(MASK_VERSION))
-LSST_MASK = '/home/kb/3-3_10_year_depth_g_nside_128.hs'
+LSST_MASK = '/home/kb/lsst_wfd_toy.fits'
 
 DES_CLASS = join(DATADIR,'classifier_des.yaml')
 PS1_CLASS = join(DATADIR,'classifier_ps1.yaml')
@@ -116,13 +116,17 @@ def load_sims(survey,filename=None):
     else: raise Exception("Unrecognized survey: %s"%survey)
 
     print("Loading %s..."%filename)
-    sims = fitsio.read(filename)
+    if '.csv' in filename:
+        sims = read_csv(filename)
+    else:
+        sims = fitsio.read(filename)
 
     # Rename the stellar density column
-    names = list(sims.dtype.names)
-    if 'STELLAR_DENSITY' not in names:
-        names[names.index('DENSITY')] = 'STELLAR_DENSITY'
-        sims.dtype.names = names
+    # names = list(sims.dtype.names)
+    # if 'STELLAR_DENSITY' not in names:
+    #     names[names.index('DENSITY')] = 'STELLAR_DENSITY'
+    #     sims.dtype.names = names
+    set_trace()
     return sims
 
 
@@ -353,7 +357,8 @@ def select_mask(ra,dec,mask):
     """
     # Mask selection
     pix = hp.ang2pix(hp.get_nside(mask), ra, dec, lonlat=True)
-    return ( (mask[pix] & BADBITS) == 0 )
+    mp = np.array(mask[pix], dtype=int)
+    return ( (mp & BADBITS) == 0 )
 
 
 def select(data,mask):
@@ -369,10 +374,10 @@ def select(data,mask):
     sel  : boolean selection array
     """
 
-    try:
-        data['TS'][data['DIFFICULTY'] == 1] = np.nan
-        data['TS'][data['DIFFICULTY'] == 2] = 99**2
-    except ValueError: pass
+    # try:
+    #     data['TS'][data['DIFFICULTY'] == 1] = np.nan
+    #     data['TS'][data['DIFFICULTY'] == 2] = 99**2
+    # except ValueError: pass
     try:
         data['SIG'][data['DIFFICULTY'] == 1] = np.nan
         data['SIG'][data['DIFFICULTY'] == 2] = 99
@@ -382,13 +387,13 @@ def select(data,mask):
     sel = select_mask(data['RA'],data['DEC'],mask)
 
     # Other possible selections
-    sel &= ((data['FLAG']==0) | (data['FLAG']==8))
-    #sel &= (np.abs(data['GLAT']) > 15)
-    sel &= (data['FRACDET_HALF'] > 0.5)
+    # sel &= ((data['FLAG']==0) | (data['FLAG']==8))
+    # #sel &= (np.abs(data['GLAT']) > 15)
+    # sel &= (data['FRACDET_HALF'] > 0.5)
 
-    # Other failed runs
-    sel &= (np.nan_to_num(data['SIG']) >= 0)
-    sel &= (np.nan_to_num(data['TS'])  >= 0)
+    # # Other failed runs
+    # sel &= (np.nan_to_num(data['SIG']) >= 0)
+    # sel &= (np.nan_to_num(data['TS'])  >= 0)
 
     # Select everything
     #sel = np.ones(len(data),dtype=bool)
@@ -397,6 +402,7 @@ def select(data,mask):
 
 
 def detect_simple(data):
+    # shouldn't this be 5.5?
     SIG = 6.0
     try:
         return (data['SIG'] > SIG)
@@ -413,5 +419,5 @@ def detect_ugali(data):
 
 
 def detect(data):
-    return detect_simple(data) & detect_ugali(data)
+    return detect_simple(data) #& detect_ugali(data)
 

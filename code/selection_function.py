@@ -20,6 +20,7 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import GridSearchCV
 import xgboost as xgb
+import pandas as pd
 
 import dc2_satellite_census.code.utils as utils
 
@@ -67,11 +68,12 @@ class SurveySelectionFunction(object):
         -------
         None
         """
-        try:
-            self.sims = utils.load_sims(self.survey)
-        except:
-            print("WARNING: Failed to load sims.")
-            self.sims = None
+        # try:
+        #     self.sims = utils.load_sims(self.survey)
+        # except:
+        #     print("WARNING: Failed to load sims.")
+        #     self.sims = None
+        self.sims = pd.read_csv('/home/kb/software/simple_adl/notebooks/simsv6_results.csv')
 
     def load_density(self):
         """ Load stellar density maps """
@@ -122,8 +124,8 @@ class SurveySelectionFunction(object):
         """ Load all components """
         self.load_sims()
         self.load_mask()
-        self.load_density()
-        self.load_classifier()
+        #self.load_density()
+        #self.load_classifier()
         self.data_sim = None
 
     def create_train_test_sample(self):
@@ -227,10 +229,10 @@ class SurveySelectionFunction(object):
         ra  = kwargs.pop('ra',None)
         dec = kwargs.pop('dec',None)
 
-        if ra is not None and dec is not None:
-            if ('stellar_density' not in kwargs) and \
-               (self.stellar_density is not None):
-                kwargs['stellar_density'] = self.get_stellar_density(ra,dec)
+        # if ra is not None and dec is not None:
+        #     if ('stellar_density' not in kwargs) and \
+        #        (self.stellar_density is not None):
+        #         kwargs['stellar_density'] = self.get_stellar_density(ra,dec)
 
         pred = self.predict_proba(**kwargs)
 
