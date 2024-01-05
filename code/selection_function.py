@@ -23,6 +23,7 @@ import xgboost as xgb
 import pandas as pd
 
 import dc2_satellite_census.code.utils as utils
+from IPython.core.debugger import set_trace
 
 class SurveySelectionFunction(object):
 
@@ -136,9 +137,8 @@ class SurveySelectionFunction(object):
         sel = utils.select(self.sims,self.mask)
         pix = hp.ang2pix(hp.get_nside(self.mask), self.sims['RA'], 
                          self.sims['DEC'], lonlat=True)
-        sel &= (self.mask[pix] == 0)
+        #sel &= (self.mask[pix] == 0)     #This doesnt seem necessary
         sel &= (self.sims['DIFFICULTY'] == 0)
-
         self.data_sim = self.sims[sel]
         self.sel_detect = utils.detect(self.data_sim)
         mc_source_id_detect = self.data_sim['MC_SOURCE_ID'][self.sel_detect]
@@ -154,9 +154,9 @@ class SurveySelectionFunction(object):
         #         x.append(np.log10(self.data_sim[key]))
         x = []
         # hack for intrinsic satellite params
-        x.append(np.log10(self.data_sim['STELLAR_MASS']))
+        x.append(self.data_sim['ABS_MAG'])
         x.append(np.log10(self.data_sim['R_PHYSICAL']))
-        x.append(self.data_sim['ELLIPTICITY'])
+        x.append(np.log10(self.data_sim['DISTANCE']))
         
         X = np.vstack(x).T
         Y = self.sel_detect
@@ -192,7 +192,8 @@ class SurveySelectionFunction(object):
                                'hidden_layer_sizes': list(itertools.product((50,45,40),repeat=3))}
         else:
             print("Training XGBClassifier...")
-            model = xgb.XGBClassifier(self.config['classifier']['params'])
+            #model = xgb.XGBClassifier(self.config['classifier']['params'])
+            model = xgb.XGBClassifier()
             parameter_space = {'learning_rate': [0.01,0.05,0.1],
                                'max_depth': [6,7,8],
                                'n_estimators': [100,250,500],
@@ -257,11 +258,12 @@ class SurveySelectionFunction(object):
         #         x_eval.append(kwargs[key])
         #     else:
         #         x_eval.append(np.log10(kwargs[key]))
-
+        
+        x_eval = []
         # hack for intrinsic satellite params
-        x_eval.append(np.log10(kwargs['STELLAR_MASS']))
-        x_eval.append(np.log10(kwargs['R_PHYSICAL']))
-        x_eval.append(kwargs['ELLIPTICITY'])
+        x_eval.append(self.data_sim['ABS_MAG'])
+        x_eval.append(np.log10(self.data_sim['R_PHYSICAL']))
+        x_eval.append(np.log10(self.data_sim['DISTANCE']))
         
         x_eval = np.vstack(x_eval).T
         pred = self.classifier.predict_proba(x_eval)[:,1]

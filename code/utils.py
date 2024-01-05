@@ -126,7 +126,6 @@ def load_sims(survey,filename=None):
     # if 'STELLAR_DENSITY' not in names:
     #     names[names.index('DENSITY')] = 'STELLAR_DENSITY'
     #     sims.dtype.names = names
-    set_trace()
     return sims
 
 
@@ -385,7 +384,6 @@ def select(data,mask):
 
     # Mask selection
     sel = select_mask(data['RA'],data['DEC'],mask)
-
     # Other possible selections
     # sel &= ((data['FLAG']==0) | (data['FLAG']==8))
     # #sel &= (np.abs(data['GLAT']) > 15)
