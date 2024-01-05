@@ -144,15 +144,20 @@ class SurveySelectionFunction(object):
         mc_source_id_detect = self.data_sim['MC_SOURCE_ID'][self.sel_detect]
 
         #Construct dataset
+        # x = []
+        # for key, operation in self.config['classifier']['params_intrinsic']:
+        #     key = key.upper()
+        #     assert operation.lower() in ['linear', 'log'], 'ERROR'
+        #     if operation.lower() == 'linear':
+        #         x.append(self.data_sim[key])
+        #     else:
+        #         x.append(np.log10(self.data_sim[key]))
         x = []
-        for key, operation in self.config['classifier']['params_intrinsic']:
-            key = key.upper()
-            assert operation.lower() in ['linear', 'log'], 'ERROR'
-            if operation.lower() == 'linear':
-                x.append(self.data_sim[key])
-            else:
-                x.append(np.log10(self.data_sim[key]))
-
+        # hack for intrinsic satellite params
+        x.append(np.log10(self.data_sim['STELLAR_MASS']))
+        x.append(np.log10(self.data_sim['R_PHYSICAL']))
+        x.append(self.data_sim['ELLIPTICITY'])
+        
         X = np.vstack(x).T
         Y = self.sel_detect
 
@@ -245,14 +250,19 @@ class SurveySelectionFunction(object):
     def predict_proba(self, **kwargs):
         """ Call underlying predictor given intrinsic parameters.
         """
-        x_eval = []
-        for key, operation in self.config['classifier']['params_intrinsic']:
-            assert operation.lower() in ['linear', 'log'], 'ERROR'
-            if operation.lower() == 'linear':
-                x_eval.append(kwargs[key])
-            else:
-                x_eval.append(np.log10(kwargs[key]))
+        # x_eval = []
+        # for key, operation in self.config['classifier']['params_intrinsic']:
+        #     assert operation.lower() in ['linear', 'log'], 'ERROR'
+        #     if operation.lower() == 'linear':
+        #         x_eval.append(kwargs[key])
+        #     else:
+        #         x_eval.append(np.log10(kwargs[key]))
 
+        # hack for intrinsic satellite params
+        x_eval.append(np.log10(kwargs['STELLAR_MASS']))
+        x_eval.append(np.log10(kwargs['R_PHYSICAL']))
+        x_eval.append(kwargs['ELLIPTICITY'])
+        
         x_eval = np.vstack(x_eval).T
         pred = self.classifier.predict_proba(x_eval)[:,1]
 
