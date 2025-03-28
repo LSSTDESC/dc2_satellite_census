@@ -2,6 +2,8 @@
 """
 Calculate Pdet values from classifier.
 """
+__author__ = "Alex Drlica-Wagner, Kabelo Tsiane"
+
 import time
 import os
 import pickle
@@ -27,7 +29,7 @@ from IPython.core.debugger import set_trace
 
 class SurveySelectionFunction(object):
 
-    def __init__(self, config_file):
+    def __init__(self, config_file, lsst_version):
         """
         Parameters
         ----------
@@ -39,7 +41,7 @@ class SurveySelectionFunction(object):
         """
         self.config = yaml.safe_load(open(config_file))
         self.survey = self.config['survey']
-        self.load()
+        self.load(lsst_version)
 
     def load_mask(self):
         """ Load the sky area mask
@@ -58,7 +60,7 @@ class SurveySelectionFunction(object):
             print("WARNING: Failed to load mask.")
             self.mask = None
 
-    def load_sims(self):
+    def load_sims(self, lsst_version):
         """ Load the input simulations for training
 
         Parameters
@@ -74,8 +76,14 @@ class SurveySelectionFunction(object):
         # except:
         #     print("WARNING: Failed to load sims.")
         #     self.sims = None
-        self.sims = pd.read_csv('/home/kb/software/simple_adl/notebooks/simsv6_results.csv')
-
+        if lsst_version is None:
+            print("Version not specified.")
+        elif lsst_version == 6: 
+            self.sims = pd.read_csv('/home/kb/software/simple_adl/notebooks/results_dir/v6_results.csv')
+        elif lsst_version == 7: 
+            self.sims = pd.read_csv('/home/kb/software/simple_adl/notebooks/results_dir/v7_results.csv')
+        return
+            
     def load_density(self):
         """ Load stellar density maps """
         try:
@@ -121,9 +129,9 @@ class SurveySelectionFunction(object):
             self.classifier = pickle.loads(open(filename,'r').read())
         return self.classifier
 
-    def load(self):
+    def load(self, lsst_version):
         """ Load all components """
-        self.load_sims()
+        self.load_sims(lsst_version)
         self.load_mask()
         #self.load_density()
         #self.load_classifier()
@@ -154,9 +162,9 @@ class SurveySelectionFunction(object):
         #         x.append(np.log10(self.data_sim[key]))
         x = []
         # hack for intrinsic satellite params
+        x.append(np.log10(self.data_sim['DISTANCE']))
         x.append(self.data_sim['ABS_MAG'])
         x.append(np.log10(self.data_sim['R_PHYSICAL']))
-        x.append(np.log10(self.data_sim['DISTANCE']))
         
         X = np.vstack(x).T
         Y = self.sel_detect
@@ -261,9 +269,9 @@ class SurveySelectionFunction(object):
         
         x_eval = []
         # hack for intrinsic satellite params
+        x_eval.append(np.log10(self.data_sim['DISTANCE']))
         x_eval.append(self.data_sim['ABS_MAG'])
         x_eval.append(np.log10(self.data_sim['R_PHYSICAL']))
-        x_eval.append(np.log10(self.data_sim['DISTANCE']))
         
         x_eval = np.vstack(x_eval).T
         pred = self.classifier.predict_proba(x_eval)[:,1]

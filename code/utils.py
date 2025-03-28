@@ -2,7 +2,8 @@
 """
 Generic python script.
 """
-__author__ = "Alex Drlica-Wagner"
+__author__ = "Alex Drlica-Wagner, Kabelo Tsiane"
+
 import os
 from os.path import join, exists
 from collections import OrderedDict as odict
@@ -108,11 +109,12 @@ def load_ps1_sims(filename=None):
     return load_sims('ps1',filename=filename)
 
 
-def load_sims(survey,filename=None):
+def load_sims(survey,filename=None, lsst_version=6):
     if filename is not None: pass
     elif survey['name'] == 'des': filename = DES_SIMS
     elif survey['name'] == 'ps1': filename = PS1_SIMS
-    elif survey['name'] == 'lsst': filename = LSST_SIMS
+    elif survey['name'] == 'lsst':
+        filename = LSST_SIMS
     else: raise Exception("Unrecognized survey: %s"%survey)
 
     print("Loading %s..."%filename)
@@ -400,7 +402,6 @@ def select(data,mask):
 
 
 def detect_simple(data):
-    # shouldn't this be 5.5?
     SIG = 6.0
     try:
         return (data['SIG'] > SIG)
