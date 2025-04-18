@@ -2,12 +2,16 @@
 """
 Calculate Pdet values from classifier.
 """
+__author__ = "Alex Drlica-Wagner, Kabelo Tsiane"
+
 import time
 import os
 import pickle
 import itertools
 import yaml
 import warnings
+import sys
+sys.path.append(os.path.expandvars('$HOME/software/'))
 
 import numpy as np
 import healpy as hp
@@ -18,12 +22,14 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import GridSearchCV
 import xgboost as xgb
+import pandas as pd
 
-import utils
+import dc2_satellite_census.code.utils as utils
+from IPython.core.debugger import set_trace
 
 class SurveySelectionFunction(object):
 
-    def __init__(self, config_file):
+    def __init__(self, config_file, lsst_version):
         """
         Parameters
         ----------
@@ -35,7 +41,7 @@ class SurveySelectionFunction(object):
         """
         self.config = yaml.safe_load(open(config_file))
         self.survey = self.config['survey']
-        self.load()
+        self.load(lsst_version)
 
     def load_mask(self):
         """ Load the sky area mask
@@ -54,7 +60,7 @@ class SurveySelectionFunction(object):
             print("WARNING: Failed to load mask.")
             self.mask = None
 
-    def load_sims(self):
+    def load_sims(self, lsst_version):
         """ Load the input simulations for training
 
         Parameters
@@ -65,12 +71,19 @@ class SurveySelectionFunction(object):
         -------
         None
         """
-        try:
-            self.sims = utils.load_sims(self.survey)
-        except:
-            print("WARNING: Failed to load sims.")
-            self.sims = None
-
+        # try:
+        #     self.sims = utils.load_sims(self.survey)
+        # except:
+        #     print("WARNING: Failed to load sims.")
+        #     self.sims = None
+        if lsst_version is None:
+            print("Version not specified.")
+        elif lsst_version == 6: 
+            self.sims = pd.read_csv('/home/kb/software/simple_adl/notebooks/results_dir/v6_results.csv')
+        elif lsst_version == 7: 
+            self.sims = pd.read_csv('/home/kb/software/simple_adl/notebooks/results_dir/v7_results.csv')
+        return
+            
     def load_density(self):
         """ Load stellar density maps """
         try:
@@ -116,12 +129,12 @@ class SurveySelectionFunction(object):
             self.classifier = pickle.loads(open(filename,'r').read())
         return self.classifier
 
-    def load(self):
+    def load(self, lsst_version):
         """ Load all components """
-        self.load_sims()
+        self.load_sims(lsst_version)
         self.load_mask()
-        self.load_density()
-        self.load_classifier()
+        #self.load_density()
+        #self.load_classifier()
         self.data_sim = None
 
     def create_train_test_sample(self):
@@ -132,23 +145,27 @@ class SurveySelectionFunction(object):
         sel = utils.select(self.sims,self.mask)
         pix = hp.ang2pix(hp.get_nside(self.mask), self.sims['RA'], 
                          self.sims['DEC'], lonlat=True)
-        sel &= (self.mask[pix] == 0)
+        #sel &= (self.mask[pix] == 0)     #This doesnt seem necessary
         sel &= (self.sims['DIFFICULTY'] == 0)
-
         self.data_sim = self.sims[sel]
         self.sel_detect = utils.detect(self.data_sim)
         mc_source_id_detect = self.data_sim['MC_SOURCE_ID'][self.sel_detect]
 
         #Construct dataset
+        # x = []
+        # for key, operation in self.config['classifier']['params_intrinsic']:
+        #     key = key.upper()
+        #     assert operation.lower() in ['linear', 'log'], 'ERROR'
+        #     if operation.lower() == 'linear':
+        #         x.append(self.data_sim[key])
+        #     else:
+        #         x.append(np.log10(self.data_sim[key]))
         x = []
-        for key, operation in self.config['classifier']['params_intrinsic']:
-            key = key.upper()
-            assert operation.lower() in ['linear', 'log'], 'ERROR'
-            if operation.lower() == 'linear':
-                x.append(self.data_sim[key])
-            else:
-                x.append(np.log10(self.data_sim[key]))
-
+        # hack for intrinsic satellite params
+        x.append(np.log10(self.data_sim['DISTANCE']))
+        x.append(self.data_sim['ABS_MAG'])
+        x.append(np.log10(self.data_sim['R_PHYSICAL']))
+        
         X = np.vstack(x).T
         Y = self.sel_detect
 
@@ -183,7 +200,8 @@ class SurveySelectionFunction(object):
                                'hidden_layer_sizes': list(itertools.product((50,45,40),repeat=3))}
         else:
             print("Training XGBClassifier...")
-            model = xgb.XGBClassifier(self.config['classifier']['params'])
+            #model = xgb.XGBClassifier(self.config['classifier']['params'])
+            model = xgb.XGBClassifier()
             parameter_space = {'learning_rate': [0.01,0.05,0.1],
                                'max_depth': [6,7,8],
                                'n_estimators': [100,250,500],
@@ -225,10 +243,10 @@ class SurveySelectionFunction(object):
         ra  = kwargs.pop('ra',None)
         dec = kwargs.pop('dec',None)
 
-        if ra is not None and dec is not None:
-            if ('stellar_density' not in kwargs) and \
-               (self.stellar_density is not None):
-                kwargs['stellar_density'] = self.get_stellar_density(ra,dec)
+        # if ra is not None and dec is not None:
+        #     if ('stellar_density' not in kwargs) and \
+        #        (self.stellar_density is not None):
+        #         kwargs['stellar_density'] = self.get_stellar_density(ra,dec)
 
         pred = self.predict_proba(**kwargs)
 
@@ -241,14 +259,20 @@ class SurveySelectionFunction(object):
     def predict_proba(self, **kwargs):
         """ Call underlying predictor given intrinsic parameters.
         """
+        # x_eval = []
+        # for key, operation in self.config['classifier']['params_intrinsic']:
+        #     assert operation.lower() in ['linear', 'log'], 'ERROR'
+        #     if operation.lower() == 'linear':
+        #         x_eval.append(kwargs[key])
+        #     else:
+        #         x_eval.append(np.log10(kwargs[key]))
+        
         x_eval = []
-        for key, operation in self.config['classifier']['params_intrinsic']:
-            assert operation.lower() in ['linear', 'log'], 'ERROR'
-            if operation.lower() == 'linear':
-                x_eval.append(kwargs[key])
-            else:
-                x_eval.append(np.log10(kwargs[key]))
-
+        # hack for intrinsic satellite params
+        x_eval.append(np.log10(self.data_sim['DISTANCE']))
+        x_eval.append(self.data_sim['ABS_MAG'])
+        x_eval.append(np.log10(self.data_sim['R_PHYSICAL']))
+        
         x_eval = np.vstack(x_eval).T
         pred = self.classifier.predict_proba(x_eval)[:,1]
 

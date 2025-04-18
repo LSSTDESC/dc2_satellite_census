@@ -2,7 +2,8 @@
 """
 Generic python script.
 """
-__author__ = "Alex Drlica-Wagner"
+__author__ = "Alex Drlica-Wagner, Kabelo Tsiane"
+
 import os
 from os.path import join, exists
 from collections import OrderedDict as odict
@@ -13,11 +14,9 @@ import healpy as hp
 import fitsio
 import pandas as pd
 
-try:
-    from ugali.utils.healpix import read_map
-except ImportError:
-    from healpy import read_map
-
+from healpy import read_map
+from healsparse import HealSparseMap
+from IPython.core.debugger import set_trace
 
 def setdefaults(kwargs,defaults):
     for k,v in defaults.items():
@@ -27,20 +26,16 @@ def setdefaults(kwargs,defaults):
 
 def get_dirname(dirname_in):
     # First see if the path exists
-    basedirs = [
-        os.environ.get("Y3SATDIR","./"),
-        '../'
-    ]
-    for basedir in basedirs:
-        dirname = os.path.join(basedir,dirname_in)
-        if os.path.exists(dirname):
-            return dirname
+    basedir = '/project/shared/data/satsim/'
+    dirname = os.path.join(basedir,dirname_in)
+    if os.path.exists(dirname):
+        return dirname
 
     raise Exception("Could not find %s"%os.path.basename(dirname))
 
 
 def get_datadir():
-    return get_dirname('data')
+    return get_dirname('lsst_dc2_v6')
 
 
 def get_plotdir():
@@ -82,16 +77,17 @@ TYPE = odict([
 ])
 
 DATADIR  = get_datadir()
-#DES_SIMS = join(DATADIR,'sim_population_v12.2.0_des_results_0000001-0100000.fits')
 DES_SIMS = join(DATADIR,'sim_population_v12.2.0_des_results_0000001-0100000.fits')
-#PS1_SIMS = join(DATADIR,'sim_population_v12.2.1_ps1_results_0000001-1000000.fits')
 PS1_SIMS = join(DATADIR,'sim_population_v13.0.1_ps1_results_0000001-1000000.fits')
+# wondering what to do about lsst_sims...
+LSST_SIMS = '/home/kb/software/simple_adl/notebooks/simsv6_results.csv'
 DWARFS   = join(DATADIR,'dwarf_literature_values.txt')
 EBV      = join(DATADIR,'ebv_sfd98_fullres_nside_4096_nest_equatorial.fits.gz')
 
 MASK_VERSION  = '6.1'
 DES_MASK = join(DATADIR,'healpix_mask_des_v{}.fits.gz'.format(MASK_VERSION))
 PS1_MASK = join(DATADIR,'healpix_mask_ps1_v{}.fits.gz'.format(MASK_VERSION))
+LSST_MASK = '/home/kb/lsst_wfd_toy.fits'
 
 DES_CLASS = join(DATADIR,'classifier_des.yaml')
 PS1_CLASS = join(DATADIR,'classifier_ps1.yaml')
@@ -113,27 +109,35 @@ def load_ps1_sims(filename=None):
     return load_sims('ps1',filename=filename)
 
 
-def load_sims(survey,filename=None):
+def load_sims(survey,filename=None, lsst_version=6):
     if filename is not None: pass
-    elif survey == 'des': filename = DES_SIMS
-    elif survey == 'ps1': filename = PS1_SIMS
+    elif survey['name'] == 'des': filename = DES_SIMS
+    elif survey['name'] == 'ps1': filename = PS1_SIMS
+    elif survey['name'] == 'lsst':
+        filename = LSST_SIMS
     else: raise Exception("Unrecognized survey: %s"%survey)
 
     print("Loading %s..."%filename)
-    sims = fitsio.read(filename)
+    if '.csv' in filename:
+        sims = read_csv(filename)
+    else:
+        sims = fitsio.read(filename)
 
     # Rename the stellar density column
-    names = list(sims.dtype.names)
-    if 'STELLAR_DENSITY' not in names:
-        names[names.index('DENSITY')] = 'STELLAR_DENSITY'
-        sims.dtype.names = names
+    # names = list(sims.dtype.names)
+    # if 'STELLAR_DENSITY' not in names:
+    #     names[names.index('DENSITY')] = 'STELLAR_DENSITY'
+    #     sims.dtype.names = names
     return sims
 
 
 def load_hpxmap(filename,nest=False):
     """ Load the mask file """
     print("Loading %s..."%filename)
-    return read_map(filename,nest)
+    if '.hs' in filename:
+        return HealSparseMap.read(filename)
+    else:
+        return read_map(filename,nest)
 
 
 #load_mask = load_hpxmap
@@ -148,10 +152,13 @@ def load_ps1_mask(nest=False):
     #return fitsio.read(PS1_MASK)['T'].ravel()
     return load_hpxmap(PS1_MASK,nest)
 
+def load_lsst_mask(nest=False):
+    return load_hpxmap(LSST_MASK, nest)
 
 def load_mask(survey,nest=False):
-    if 'ps1' in survey: return load_ps1_mask()
-    elif 'des' in survey: return load_des_mask()
+    if survey['name'] == 'ps1': return load_ps1_mask()
+    elif survey['name'] == 'des': return load_des_mask()
+    elif survey['name'] == 'lsst': return load_lsst_mask()
     else: raise Exception("Unrecognized survey: %s"%survey)
 
 
@@ -351,7 +358,8 @@ def select_mask(ra,dec,mask):
     """
     # Mask selection
     pix = hp.ang2pix(hp.get_nside(mask), ra, dec, lonlat=True)
-    return ( (mask[pix] & BADBITS) == 0 )
+    mp = np.array(mask[pix], dtype=int)
+    return ( (mp & BADBITS) == 0 )
 
 
 def select(data,mask):
@@ -367,10 +375,10 @@ def select(data,mask):
     sel  : boolean selection array
     """
 
-    try:
-        data['TS'][data['DIFFICULTY'] == 1] = np.nan
-        data['TS'][data['DIFFICULTY'] == 2] = 99**2
-    except ValueError: pass
+    # try:
+    #     data['TS'][data['DIFFICULTY'] == 1] = np.nan
+    #     data['TS'][data['DIFFICULTY'] == 2] = 99**2
+    # except ValueError: pass
     try:
         data['SIG'][data['DIFFICULTY'] == 1] = np.nan
         data['SIG'][data['DIFFICULTY'] == 2] = 99
@@ -378,15 +386,14 @@ def select(data,mask):
 
     # Mask selection
     sel = select_mask(data['RA'],data['DEC'],mask)
-
     # Other possible selections
-    sel &= ((data['FLAG']==0) | (data['FLAG']==8))
-    #sel &= (np.abs(data['GLAT']) > 15)
-    sel &= (data['FRACDET_HALF'] > 0.5)
+    # sel &= ((data['FLAG']==0) | (data['FLAG']==8))
+    # #sel &= (np.abs(data['GLAT']) > 15)
+    # sel &= (data['FRACDET_HALF'] > 0.5)
 
-    # Other failed runs
-    sel &= (np.nan_to_num(data['SIG']) >= 0)
-    sel &= (np.nan_to_num(data['TS'])  >= 0)
+    # # Other failed runs
+    # sel &= (np.nan_to_num(data['SIG']) >= 0)
+    # sel &= (np.nan_to_num(data['TS'])  >= 0)
 
     # Select everything
     #sel = np.ones(len(data),dtype=bool)
@@ -411,5 +418,5 @@ def detect_ugali(data):
 
 
 def detect(data):
-    return detect_simple(data) & detect_ugali(data)
+    return detect_simple(data) #& detect_ugali(data)
 
